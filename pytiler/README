@@ -1,0 +1,22 @@
+pytiler2.py
+* Command line based app, merely re-arranges windows depending on arguments
+pytiler3.py
+* Daemon. Continually arranges windows. A window arranger for window managers (ie: floating WMs that do no arranging)
+
+* Both need a WM that has EWMH/NetWM support. Openbox is one good example, but most WMs have support to a degree.
+* Both depend on wnck. This is either in gnome-python-desktop (gnome deps), or python-wnck (no gnome deps) in the AUR.
+
+python-globalhotkeys
+ * From: http://code.google.com/p/python-globalhotkeys/ 
+ * A GPL/Artistic module that provides global hotkeys.
+ * Added setup.py
+ * Depends on gtk2 and glib
+
+openbox
+* Special support is included for openbox with window decorations entirely disabled.
+* To disable decorations, add the following to the <applications> section in your rc.xml
+ <application class="*">
+     <decor>no</decor>
+ </application>
+* Openbox makes a great tiling WM and works well with these scripts.
+
