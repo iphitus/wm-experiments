@@ -1,0 +1,10 @@
+ - Adds 'overlap' support for tiling mode. This makes tiling workable
+on a small display. Windows on the right can still be used without
+being resized and while keeping a tiled layout. Echinus*overlap:
+controls number of pixels overlap Screenshot: [1]
+ - Removes restacking in floating mode: Changing windows caused a
+restack of the whole floating area, which changed the order of the
+layed out windows and caused a visible flicker. Instead the patch just
+raises windows.
+ - Click to raise clients in sloppy+floating mode. Previously they
+were only raised when moved or titlebar was clicked.

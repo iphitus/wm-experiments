@@ -1,0 +1,217 @@
+diff -r 9121deec262e -r cc4bf862287e echinus.c
+--- a/echinus.c	Sun Jun 07 20:48:28 2009 +0400
++++ b/echinus.c	Fri Jul 10 11:31:28 2009 +1000
+@@ -193,6 +193,7 @@
+ void resize(Client *c, int x, int y, int w, int h, Bool sizehints);
+ void resizemouse(Client *c);
+ void restack(void);
++void raisewindow(void);
+ void run(void);
+ void scan(void);
+ void setclientstate(Client *c, long state);
+@@ -240,6 +241,7 @@
+ unsigned int blw = 0;
+ unsigned int curtag = 0;
+ unsigned int numlockmask = 0;
++unsigned int overlap = 0;
+ Atom wmatom[WMLast];
+ Bool domwfact = True;
+ Bool dozoom = True;
+@@ -249,6 +251,7 @@
+ Bool notitles = False;
+ Bool sloppy = False;
+ Bool drawoutline = False;
++Bool islayoutfloating = False;
+ Client *clients = NULL;
+ Client *sel = NULL;
+ Client *stack = NULL;
+@@ -480,27 +483,27 @@
+     }
+     if((c = getclient(ev->window, clients, False))) {
+         focus(c);
+-        restack();
++        if (islayoutfloating)
++            raisewindow();
++        else
++            restack();
++
+         XAllowEvents(dpy, ReplayPointer, CurrentTime);
+         if(CLEANMASK(ev->state) != modkey)
+            return;
+         if(ev->button == Button1) {
+-                if((layouts[ltidxs[curtag]].arrange == floating) || c->isfloating)
+-                        restack();
+-                else 
++                if (!c->isfloating && !islayoutfloating)
+                     togglefloating(NULL);
+                 movemouse(c);
+         }
+         else if(ev->button == Button2) {
+-                if((floating != layouts[ltidxs[curtag]].arrange) && c->isfloating)
++                if(!islayoutfloating && c->isfloating)
+                         togglefloating(NULL);
+                 else
+                         zoom(NULL);
+         }
+         else if(ev->button == Button3 && !c->isfixed) {
+-                if((floating == layouts[ltidxs[curtag]].arrange) || c->isfloating)
+-                        restack();
+-                else
++                if(!islayoutfloating && !c->isfloating)
+                         togglefloating(NULL);
+                 resizemouse(c);
+         }
+@@ -525,8 +528,8 @@
+             }
+         }
+         if(ev->button == Button1) {
+-            if((layouts[ltidxs[curtag]].arrange == floating) || (layouts[ltidxs[curtag]].arrange == ifloating) || c->isfloating)
+-                restack();
++            if(islayoutfloating || c->isfloating)
++                raisewindow();
+             movemouse(c);
+         }
+         else if(ev->button == Button3 && !c->isfixed) {
+@@ -739,20 +742,23 @@
+     Client *c;
+ 
+     if(ev->mode != NotifyNormal || ev->detail == NotifyInferior)
+-        return;
++        return;			
++            	//if(c->isfloating || islayoutfloating || sloppy) {
+     if((c = getclient(ev->window, clients, False))){
+-	if(c->isfloating || (layouts[ltidxs[curtag]].arrange == floating) || (layouts[ltidxs[curtag]].arrange == ifloating) || sloppy){
+-            if(c->isbastard){
+-                grabbuttons(c, True);
+-            }
+-            else
+-                focus(c);
++    	if (c->isbastard) {
++    		grabbuttons(c, True);
++		} else if (!islayoutfloating) { // tiling
++			focus(c);
++			restack();
++		} else if (!sloppy) { // floating layout, not sloppy
++			focus(c);
++			XGrabButton(dpy, AnyButton, AnyModifier, c->win, False,
++                    BUTTONMASK, GrabModeSync, GrabModeSync, None, None);
++        } else {
++	    	XGrabButton(dpy, AnyButton, AnyModifier, c->win, False,
++                    BUTTONMASK, GrabModeSync, GrabModeSync, None, None);
+         }
+-	else
+-	    XGrabButton(dpy, AnyButton, AnyModifier, c->win, False,
+-                    BUTTONMASK, GrabModeSync, GrabModeSync, None, None);
+-    }
+-    else if(ev->window == root) {
++    } else if(ev->window == root) {
+         selscreen = True;
+         focus(NULL);
+     }
+@@ -781,7 +787,7 @@
+ floating(void) { /* default floating layout */
+     Client *c;
+     notitles = False;
+-
++    islayoutfloating = True;
+     domwfact = dozoom = False;
+     for(c = clients; c; c = c->next){
+         if(isvisible(c) && !c->isicon) {
+@@ -843,7 +849,7 @@
+             for(c = clients; c && (c->isbastard || c->isicon || !isvisible(c)); c = c->next);
+     if(c) {
+             focus(c);
+-            restack();
++            raisewindow();
+     }
+ }
+ 
+@@ -860,7 +866,7 @@
+     }
+     if(c) {
+             focus(c);
+-            restack();
++            raisewindow();
+     }
+ }
+ 
+@@ -1272,6 +1278,7 @@
+ ifloating(void){
+     Client *c;
+     int x, y, f;
++    islayoutfloating = True;
+     for(c = clients; c; c = c->next){ 
+         if(isvisible(c) && !c->isicon && !c->isbastard){
+                 for(f = 0; !c->isplaced; f++){ 
+@@ -1303,6 +1310,7 @@
+ monocle(void) {
+     Client *c;
+     wasfloating = False;
++    islayoutfloating = False;
+     for(c = clients; c; c = c->next){
+         if(isvisible(c) && !c->isicon && !c->isbastard) {
+ 	    c->isplaced = False;
+@@ -1593,6 +1601,18 @@
+ }
+ 
+ void
++raisewindow(void) {
++    XEvent ev;
++
++    if(!sel)
++            return;
++
++    XRaiseWindow(dpy, sel->frame);
++    XSync(dpy, False);
++    while(XCheckMaskEvent(dpy, EnterWindowMask, &ev));
++}
++
++void
+ run(void) {
+     fd_set rd;
+     int xfd;
+@@ -1609,7 +1629,7 @@
+                             continue;
+                     eprint("select failed\n");
+             }
+-            while(XPending(dpy)) {
++            while(XPending(dpy)) {	
+                     XNextEvent(dpy, &ev);
+                     if(handler[ev.type])
+                             (handler[ev.type])(&ev); /* call handler */
+@@ -1858,6 +1878,7 @@
+         tbpos = atoi(getresource("tagbar", TAGBAR));
+         sloppy = atoi(getresource("sloppy", "0"));
+         drawoutline = atoi(getresource("outline", "0"));
++        overlap = atoi(getresource("overlap", "0"));
+ 
+ 	struts[RightStrut] = struts[LeftStrut] = struts[TopStrut] = struts[BotStrut] = 0;
+         updategeom();
+@@ -1917,7 +1938,8 @@
+ bstack(void) {
+     unsigned int i, n, nx, ny, nw, nh, mh, tw;
+     Client *c, *mc;
+-
++    
++    islayoutfloating = False;
+     domwfact = dozoom = True;
+     for(n = 0, c = nexttiled(clients); c; c = nexttiled(c->next))
+         n++;
+@@ -1960,7 +1982,7 @@
+ 	Client *c, *mc;
+ 
+         wasfloating = False;
+-
++        islayoutfloating = False;
+ 	domwfact = dozoom = True;
+ 	for(n = 0, c = nexttiled(clients); c; c = nexttiled(c->next))
+ 		n++;
+@@ -1993,7 +2015,7 @@
+                 else {  /* tile window */
+                         if(i == nmasters[curtag]) {
+                                 ny = way;
+-                                nx += mc->w + mc->border;
++                                nx += mc->w + mc->border - overlap;
+                                 nw = waw - nx - 2*c->border;
+                         }
+                         else 
